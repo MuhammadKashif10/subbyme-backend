@@ -105,14 +105,21 @@ export class MessagesController {
   }
 
   @Post('mark-read')
-  markAsRead(
+  async markAsRead(
     @Body() body: { conversationId: string; messageIds?: string[] },
     @CurrentUser() user: JwtUser,
   ) {
-    return this.messagesService.markAsRead(
+    const readIds = await this.messagesService.markAsRead(
       body.conversationId,
       user.sub,
       body.messageIds,
     );
+    if (readIds.length > 0) {
+      this.chatGateway.emitMessageRead(body.conversationId, {
+        messageIds: readIds,
+        userId: user.sub,
+      });
+    }
+    return { success: true };
   }
 }

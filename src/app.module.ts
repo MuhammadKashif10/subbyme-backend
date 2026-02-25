@@ -16,6 +16,7 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TradesModule } from './modules/trades/trades.module';
 import { AvailabilityModule } from './modules/availability/availability.module';
+import { ContactModule } from './modules/contact/contact.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { AvailabilityModule } from './modules/availability/availability.module';
     NotificationsModule,
     TradesModule,
     AvailabilityModule,
+    ContactModule,
   ],
 })
 export class AppModule {}

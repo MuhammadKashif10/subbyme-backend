@@ -77,7 +77,7 @@ export class MessagesService {
     conversationId: string,
     userId: string,
     messageIds?: string[],
-  ): Promise<void> {
+  ): Promise<string[]> {
     await this.conversationsService.validateParticipant(conversationId, userId);
 
     const filter: Record<string, unknown> = {
@@ -89,7 +89,10 @@ export class MessagesService {
       filter['_id'] = { $in: messageIds.map((id) => new Types.ObjectId(id)) };
     }
 
+    const toUpdate = await this.messageModel.find(filter).select('_id').exec();
+    const ids = toUpdate.map((m) => m._id.toString());
     await this.messageModel.updateMany(filter, { read: true }).exec();
+    return ids;
   }
 
   async findById(id: string): Promise<MessageDocument> {
