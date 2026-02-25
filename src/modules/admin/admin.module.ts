@@ -9,6 +9,7 @@ import { Transaction, TransactionSchema } from '../transactions/schemas/transact
 import { Review, ReviewSchema } from '../reviews/schemas/review.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ConversationsModule } from '../conversations/conversations.module';
+import { PromoCodesModule } from '../promocodes/promocodes.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
     ListingsModule,
     NotificationsModule,
     ConversationsModule,
+    PromoCodesModule,
     MongooseModule.forFeature([
       { name: Application.name, schema: ApplicationSchema },
       { name: Transaction.name, schema: TransactionSchema },

@@ -56,6 +56,9 @@ export class Transaction {
   @Prop({ trim: true })
   stripePaymentIntentId?: string;
 
+  @Prop({ type: Types.ObjectId, ref: 'PromoCode', default: null })
+  promoCodeId?: Types.ObjectId;
+
   @Prop({ type: Object, default: {} })
   metadata: Record<string, unknown>;
 

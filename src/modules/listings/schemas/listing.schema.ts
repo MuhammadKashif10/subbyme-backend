@@ -96,10 +96,10 @@ export class Listing {
 
 export const ListingSchema = SchemaFactory.createForClass(Listing);
 
-// Indexes
+// Indexes — clientId for secure client-scoped queries
 ListingSchema.index({ status: 1, category: 1 });
 ListingSchema.index({ status: 1, location: 1 });
-ListingSchema.index({ clientId: 1, status: 1 });
+ListingSchema.index({ clientId: 1, status: 1 }); // createdBy-equivalent; performance for findByClient
 ListingSchema.index({ createdAt: -1 });
 ListingSchema.index({ title: 'text', description: 'text', category: 'text' });
 

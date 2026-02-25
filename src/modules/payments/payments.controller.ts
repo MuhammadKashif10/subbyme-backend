@@ -16,6 +16,7 @@ import { PaymentsService } from './payments.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CreateJobPaymentDto } from './dto/create-job-payment.dto';
 import { ReleasePaymentDto } from './dto/release-payment.dto';
+import { ValidatePromoDto } from './dto/validate-promo.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -31,6 +32,14 @@ interface JwtUser {
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // ── Validate promo (contractor, before checkout) ──
+  @Post('validate-promo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CONTRACTOR)
+  validatePromo(@Body() dto: ValidatePromoDto) {
+    return this.paymentsService.validatePromoCode(dto.code, dto.plan);
+  }
+
   // ── Contractor subscribes ──
   @Post('create-subscription')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -39,7 +48,11 @@ export class PaymentsController {
     @Body() dto: CreateSubscriptionDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.paymentsService.createSubscriptionCheckout(user.sub, dto.plan);
+    return this.paymentsService.createSubscriptionCheckout(
+      user.sub,
+      dto.plan,
+      dto.promoCodeId,
+    );
   }
 
   // ── Contractor upgrades qualification ──

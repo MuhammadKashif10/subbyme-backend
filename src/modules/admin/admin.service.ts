@@ -17,12 +17,16 @@ import { Review, ReviewDocument } from '../reviews/schemas/review.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 import { ChatGateway } from '../conversations/chat.gateway';
+import { PromoCodesService } from '../promocodes/promocodes.service';
+import { CreatePromoCodeDto } from '../promocodes/dto/create-promo-code.dto';
+import { UpdatePromoCodeDto } from '../promocodes/dto/update-promo-code.dto';
 
 @Injectable()
 export class AdminService {
   constructor(
     private usersService: UsersService,
     private listingsService: ListingsService,
+    private promoCodesService: PromoCodesService,
     @InjectModel(Application.name)
     private applicationModel: Model<ApplicationDocument>,
     @InjectModel(Transaction.name)
@@ -240,5 +244,26 @@ export class AdminService {
 
   async removeUserProfileImage(userId: string) {
     return this.usersService.adminRemoveProfileImage(userId);
+  }
+
+  // ── Promo Codes ──
+  async createPromoCode(dto: CreatePromoCodeDto, adminId: string) {
+    return this.promoCodesService.create(dto, adminId);
+  }
+
+  async getPromoCodes(page = 1, limit = 20) {
+    return this.promoCodesService.findAll(page, limit);
+  }
+
+  async getPromoCodeById(id: string) {
+    return this.promoCodesService.findById(id);
+  }
+
+  async updatePromoCode(id: string, dto: UpdatePromoCodeDto) {
+    return this.promoCodesService.update(id, dto);
+  }
+
+  async deletePromoCode(id: string) {
+    return this.promoCodesService.delete(id);
   }
 }

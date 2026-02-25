@@ -73,10 +73,11 @@ export class MessagesController {
       user.sub,
       user.role as import('../users/schemas/user.schema').UserRole,
     );
-    const participants = conv.participants as { toString: () => string }[];
-    const recipientId = participants.find((p) => p.toString() !== user.sub);
-    if (recipientId) {
-      const recipientIdStr = recipientId.toString();
+    // participants are populated as { _id, name, avatar, ... }, so use _id
+    const participants = conv.participants as Array<{ _id: { toString: () => string } }>;
+    const recipient = participants.find((p) => p._id.toString() !== user.sub);
+    if (recipient) {
+      const recipientIdStr = recipient._id.toString();
       const notif = await this.notificationsService.create(
         recipientIdStr,
         NotificationType.NEW_MESSAGE,

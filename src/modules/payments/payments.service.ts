@@ -17,6 +17,7 @@ import {
   PaymentMethod,
 } from '../transactions/schemas/transaction.schema';
 import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
+import { PromoCodesService } from '../promocodes/promocodes.service';
 
 const PLAN_PRICES: Record<string, { amount: number; name: string; trialDays: number }> = {
   standard: { amount: 1000, name: 'SubbyMe Standard', trialDays: 14 },
@@ -33,12 +34,17 @@ export class PaymentsService {
     @InjectModel(Transaction.name) private txModel: Model<TransactionDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private config: ConfigService,
+    private promoCodesService: PromoCodesService,
   ) {
     this.stripe = new Stripe(this.config.get<string>('STRIPE_SECRET_KEY') || '');
   }
 
   private get frontendUrl(): string {
     return this.config.get<string>('frontendUrl') || 'http://localhost:8080';
+  }
+
+  async validatePromoCode(code: string, plan: 'standard' | 'premium') {
+    return this.promoCodesService.validateForSubscription(code, plan);
   }
 
   private async getOrCreateCustomer(user: UserDocument): Promise<string> {
@@ -58,6 +64,7 @@ export class PaymentsService {
   async createSubscriptionCheckout(
     userId: string,
     plan: 'standard' | 'premium',
+    promoCodeId?: string,
   ): Promise<{ url: string }> {
     const user = await this.userModel.findById(userId);
     if (!user) throw new NotFoundException('User not found');
@@ -67,16 +74,32 @@ export class PaymentsService {
     const planConfig = PLAN_PRICES[plan];
     if (!planConfig) throw new BadRequestException('Invalid plan');
 
+    let amount = planConfig.amount;
+    let extraTrialDays = 0;
+    let appliedPromoCodeId: string | null = null;
+
+    if (promoCodeId) {
+      const promoResult = await this.promoCodesService.applyForCheckout(promoCodeId, plan);
+      if (promoResult) {
+        amount = promoResult.amount;
+        extraTrialDays = promoResult.extraTrialDays;
+        appliedPromoCodeId = promoResult.promoCodeId;
+      }
+    }
+
     const customerId = await this.getOrCreateCustomer(user);
+
+    const trialDays = user.subscriptionPlan ? 0 : planConfig.trialDays + extraTrialDays;
 
     const tx = await this.txModel.create({
       type: TransactionType.SUBSCRIPTION,
       userId: new Types.ObjectId(userId),
-      amount: planConfig.amount,
+      amount,
       currency: 'AUD',
       status: TransactionStatus.PENDING,
       paymentMethod: PaymentMethod.STRIPE,
-      metadata: { plan },
+      promoCodeId: appliedPromoCodeId ? new Types.ObjectId(appliedPromoCodeId) : undefined,
+      metadata: { plan, originalAmount: planConfig.amount },
     });
 
     const session = await this.stripe.checkout.sessions.create({
@@ -86,7 +109,7 @@ export class PaymentsService {
         {
           price_data: {
             currency: 'aud',
-            unit_amount: planConfig.amount,
+            unit_amount: amount,
             recurring: { interval: 'week' },
             product_data: { name: planConfig.name },
           },
@@ -94,10 +117,21 @@ export class PaymentsService {
         },
       ],
       subscription_data: {
-        trial_period_days: user.subscriptionPlan ? 0 : planConfig.trialDays,
-        metadata: { userId, plan, transactionId: tx._id.toString() },
+        trial_period_days: trialDays,
+        metadata: {
+          userId,
+          plan,
+          transactionId: tx._id.toString(),
+          promoCodeId: appliedPromoCodeId ?? '',
+        },
       },
-      metadata: { userId, plan, transactionId: tx._id.toString(), type: 'subscription' },
+      metadata: {
+        userId,
+        plan,
+        transactionId: tx._id.toString(),
+        type: 'subscription',
+        promoCodeId: appliedPromoCodeId ?? '',
+      },
       success_url: `${this.frontendUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${this.frontendUrl}/payment/cancel`,
     });
@@ -315,7 +349,11 @@ export class PaymentsService {
       }
 
       if (txId) {
+        const tx = await this.txModel.findById(txId).exec();
         await this.txModel.findByIdAndUpdate(txId, { status: TransactionStatus.COMPLETED });
+        if (tx?.promoCodeId) {
+          await this.promoCodesService.incrementUsedCount(tx.promoCodeId.toString());
+        }
       }
     }
 

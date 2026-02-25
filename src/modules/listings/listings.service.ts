@@ -25,18 +25,32 @@ export class ListingsService {
     return listing.save();
   }
 
-  async findAll(query: {
-    status?: ListingStatus;
-    category?: string;
-    location?: string;
-    search?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ listings: ListingDocument[]; total: number; page: number; limit: number }> {
+  async findAll(
+    query: {
+      status?: ListingStatus;
+      category?: string;
+      location?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+    userId?: string,
+    userRole?: UserRole,
+  ): Promise<{ listings: ListingDocument[]; total: number; page: number; limit: number }> {
     const { status, category, location, search, page = 1, limit = 20 } = query;
     const filter: Record<string, unknown> = {};
 
-    if (status) filter['status'] = status;
+    // Role-based security: server-side enforcement
+    if (userRole === UserRole.CLIENT) {
+      // Clients: only their own jobs (createdBy = clientId)
+      filter['clientId'] = new Types.ObjectId(userId!);
+    } else if (userRole === UserRole.CONTRACTOR) {
+      // Contractors: only open jobs (never private client dashboards)
+      filter['status'] = ListingStatus.OPEN;
+    }
+    // Admin: no extra filter (admin controller uses this for management)
+
+    if (status && userRole !== UserRole.CONTRACTOR) filter['status'] = status;
     if (category) filter['category'] = new RegExp(category, 'i');
     if (location) filter['location'] = new RegExp(location, 'i');
     if (search) filter['$text'] = { $search: search };
@@ -65,6 +79,41 @@ export class ListingsService {
 
     if (!listing) throw new NotFoundException('Listing not found');
     return listing;
+  }
+
+  /**
+   * Find by ID with access control. Returns 403 if user cannot access.
+   */
+  async findByIdWithAccess(
+    id: string,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<ListingDocument> {
+    const listing = await this.findById(id);
+
+    if (userRole === UserRole.ADMIN) return listing;
+
+    if (userRole === UserRole.CLIENT) {
+      const isOwner = listing.clientId.toString() === userId;
+      if (!isOwner) {
+        throw new ForbiddenException('You can only access your own jobs');
+      }
+      return listing;
+    }
+
+    if (userRole === UserRole.CONTRACTOR) {
+      const isOpen = listing.status === ListingStatus.OPEN;
+      const isAssigned =
+        listing.assignedContractorId?.toString() === userId;
+      if (!isOpen && !isAssigned) {
+        throw new ForbiddenException(
+          'You can only view open jobs or jobs assigned to you',
+        );
+      }
+      return listing;
+    }
+
+    throw new ForbiddenException('Unauthorized to access this job');
   }
 
   async findByClient(clientId: string, status?: ListingStatus): Promise<ListingDocument[]> {

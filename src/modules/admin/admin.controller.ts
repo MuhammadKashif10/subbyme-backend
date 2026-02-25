@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Param,
@@ -11,9 +12,12 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { CreatePromoCodeDto } from '../promocodes/dto/create-promo-code.dto';
+import { UpdatePromoCodeDto } from '../promocodes/dto/update-promo-code.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ParseObjectIdPipe } from '../../common/pipes/parse-object-id.pipe';
 import { UserRole } from '../users/schemas/user.schema';
 import { ListingStatus } from '../listings/schemas/listing.schema';
@@ -38,6 +42,11 @@ class SetSubscriptionDto {
   @IsString()
   @IsOptional()
   plan: string | null;
+}
+
+interface JwtUser {
+  sub: string;
+  role: UserRole;
 }
 
 @Controller('admin')
@@ -140,5 +149,45 @@ export class AdminController {
   @Delete('users/:id/profile-image')
   removeUserProfileImage(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
     return this.adminService.removeUserProfileImage(id.toString());
+  }
+
+  // ── Promo Codes ──
+  @Get('promo-codes')
+  getPromoCodes(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getPromoCodes(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
+  }
+
+  @Get('promo-codes/:id')
+  getPromoCodeById(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
+    return this.adminService.getPromoCodeById(id.toString());
+  }
+
+  @Post('promo-codes')
+  @HttpCode(HttpStatus.CREATED)
+  createPromoCode(
+    @Body() dto: CreatePromoCodeDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.adminService.createPromoCode(dto, user.sub);
+  }
+
+  @Patch('promo-codes/:id')
+  updatePromoCode(
+    @Param('id', ParseObjectIdPipe) id: Types.ObjectId,
+    @Body() dto: UpdatePromoCodeDto,
+  ) {
+    return this.adminService.updatePromoCode(id.toString(), dto);
+  }
+
+  @Delete('promo-codes/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deletePromoCode(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
+    return this.adminService.deletePromoCode(id.toString());
   }
 }
