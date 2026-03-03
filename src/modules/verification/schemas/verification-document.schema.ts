@@ -38,6 +38,9 @@ export class VerificationDocument {
   @Prop({ required: true, trim: true })
   documentUrl: string;
 
+  @Prop({ type: String, trim: true, default: null })
+  mimeType?: string | null;
+
   @Prop({
     type: String,
     required: true,

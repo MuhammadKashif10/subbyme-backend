@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Param,
   UseGuards,
   UploadedFile,
   UseInterceptors,
@@ -9,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  StreamableFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -17,6 +19,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/schemas/user.schema';
+import { ParseObjectIdPipe } from '../../common/pipes/parse-object-id.pipe';
+import { Types } from 'mongoose';
 import {
   VerificationDocumentType,
 } from './schemas/verification-document.schema';
@@ -64,6 +68,28 @@ export class VerificationController {
   @Roles(UserRole.CONTRACTOR)
   async getMine(@CurrentUser() user: JwtUser) {
     return this.verificationService.getForUser(user.sub);
+  }
+
+  @Get('document/:id')
+  @Roles(UserRole.CONTRACTOR, UserRole.ADMIN)
+  async getDocument(
+    @Param('id', ParseObjectIdPipe) id: Types.ObjectId,
+    @CurrentUser() user: JwtUser,
+  ): Promise<StreamableFile> {
+    const { url, mimeType } = await this.verificationService.getDocumentForView(
+      id.toString(),
+      user.sub,
+      user.role,
+    );
+    const fetchRes = await fetch(url);
+    if (!fetchRes.ok) {
+      throw new BadRequestException('Failed to fetch document');
+    }
+    const buffer = await fetchRes.arrayBuffer();
+    return new StreamableFile(Buffer.from(buffer), {
+      type: mimeType,
+      disposition: 'inline',
+    });
   }
 }
 

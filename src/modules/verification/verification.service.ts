@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -33,10 +37,29 @@ export class VerificationService {
       userId: new Types.ObjectId(userId),
       type,
       documentUrl: upload.url,
+      mimeType: upload.fileType || null,
       status: VerificationDocumentStatus.PENDING,
     });
 
     return doc;
+  }
+
+  async getDocumentForView(
+    docId: string,
+    userId: string,
+    userRole: string,
+  ): Promise<{ url: string; mimeType: string }> {
+    const doc = await this.verificationModel.findById(docId).exec();
+    if (!doc) {
+      throw new NotFoundException('Verification document not found');
+    }
+    if (userRole !== 'admin' && doc.userId.toString() !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    const mimeType =
+      doc.mimeType ||
+      (doc.documentUrl?.includes('/image/') ? 'image/jpeg' : 'application/pdf');
+    return { url: doc.documentUrl, mimeType };
   }
 
   async getForUser(userId: string): Promise<VerificationDocumentDocument[]> {

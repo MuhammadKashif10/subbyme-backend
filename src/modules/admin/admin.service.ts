@@ -125,9 +125,15 @@ export class AdminService {
   }
 
   async setUserVerified(id: string, isVerified: boolean) {
-    throw new ForbiddenException(
-      'Verification status is managed via verification documents and cannot be toggled directly.',
-    );
+    const user = await this.usersService.setVerified(id, isVerified);
+    await this.adminLogService.log({
+      adminId: id,
+      action: 'user_verify',
+      targetType: 'user',
+      targetId: id,
+      metadata: { isVerified },
+    });
+    return user;
   }
 
   async setSubscriptionStatus(
