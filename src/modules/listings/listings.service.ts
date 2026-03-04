@@ -142,7 +142,11 @@ export class ListingsService {
     userId: string,
     userRole: UserRole,
   ): Promise<ListingDocument> {
-    const listing = await this.listingModel.findById(id).exec();
+    const cleanId = typeof id === 'string' ? id.trim() : String(id);
+    if (!Types.ObjectId.isValid(cleanId)) {
+      throw new NotFoundException('Invalid listing ID format');
+    }
+    const listing = await this.listingModel.findById(cleanId).exec();
     if (!listing) throw new NotFoundException('Listing not found');
 
     const isOwner = listing.clientId.toString() === userId;
@@ -168,8 +172,13 @@ export class ListingsService {
 
     const previousStatus = listing.status;
 
+    const updatePayload: Record<string, unknown> = { ...updateListingDto };
+    if (updateListingDto.assignedContractorId && Types.ObjectId.isValid(updateListingDto.assignedContractorId)) {
+      updatePayload.assignedContractorId = new Types.ObjectId(updateListingDto.assignedContractorId);
+    }
+
     const updated = await this.listingModel
-      .findByIdAndUpdate(id, { $set: updateListingDto }, { new: true, runValidators: true })
+      .findByIdAndUpdate(cleanId, { $set: updatePayload }, { new: true, runValidators: true })
       .exec();
 
     const updatedListing = updated as ListingDocument;
