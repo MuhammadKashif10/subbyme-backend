@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -22,6 +23,9 @@ interface JwtUser {
 }
 
 class ReviewVerificationDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
   reason?: string;
 }
 
