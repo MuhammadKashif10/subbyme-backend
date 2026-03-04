@@ -159,10 +159,11 @@ export class ApplicationsService {
       throw new BadRequestException('Invalid listing reference on application');
     }
 
-    const listing = await this.listingsService.findById(listingId);
+    // Use getClientId to avoid issues with populated clientId documents
+    const ownerId = await this.listingsService.getClientId(listingId);
 
     const isContractor = application.contractorId.toString() === userId;
-    const isListingOwner = listing.clientId.toString() === userId;
+    const isListingOwner = ownerId === userId;
 
     // Contractor can only withdraw their own pending application
     if (isContractor) {
