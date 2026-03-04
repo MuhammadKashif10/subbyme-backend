@@ -140,10 +140,26 @@ export class ApplicationsService {
     userId: string,
     userRole: UserRole,
   ): Promise<ApplicationDocument> {
-    const application = await this.findById(id);
-    const listing = await this.listingsService.findById(
-      application.listingId.toString(),
-    );
+    const application = await this.applicationModel.findById(id).exec();
+    if (!application) throw new NotFoundException('Application not found');
+
+    // listingId might be an ObjectId or a populated document; normalize to string ObjectId
+    const rawListingId =
+      application.listingId instanceof Types.ObjectId
+        ? application.listingId
+        : (application.listingId as unknown as { _id?: Types.ObjectId })?._id;
+
+    const listingId = rawListingId?.toString() ?? '';
+    if (!Types.ObjectId.isValid(listingId)) {
+      this.logger.error(
+        `Invalid listingId on application ${id}: ${JSON.stringify(
+          application.listingId,
+        )}`,
+      );
+      throw new BadRequestException('Invalid listing reference on application');
+    }
+
+    const listing = await this.listingsService.findById(listingId);
 
     const isContractor = application.contractorId.toString() === userId;
     const isListingOwner = listing.clientId.toString() === userId;
@@ -176,12 +192,12 @@ export class ApplicationsService {
       updateDto.status === ApplicationStatus.WITHDRAWN ||
       updateDto.status === ApplicationStatus.REJECTED
     ) {
-      await this.listingsService.decrementApplicationCount(application.listingId.toString());
+      await this.listingsService.decrementApplicationCount(listingId);
     }
 
     if (updateDto.status === ApplicationStatus.ACCEPTED) {
       const contractorId = application.contractorId.toString();
-      const listing = await this.listingsService.findById(application.listingId.toString());
+      const listing = await this.listingsService.findById(listingId);
       const notif = await this.notificationsService.create(
         contractorId,
         NotificationType.APPLICATION_ACCEPTED,
@@ -191,7 +207,7 @@ export class ApplicationsService {
       this.chatGateway.emitNotification(contractorId, notif);
     } else if (updateDto.status === ApplicationStatus.REJECTED) {
       const contractorId = application.contractorId.toString();
-      const listing = await this.listingsService.findById(application.listingId.toString());
+      const listing = await this.listingsService.findById(listingId);
       const notif = await this.notificationsService.create(
         contractorId,
         NotificationType.APPLICATION_REJECTED,
