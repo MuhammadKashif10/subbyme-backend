@@ -6,6 +6,7 @@ import { Listing, ListingSchema } from './schemas/listing.schema';
 import { Application, ApplicationSchema } from '../applications/schemas/application.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ConversationsModule } from '../conversations/conversations.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
     ]),
     NotificationsModule,
     ConversationsModule,
+    PaymentsModule,
   ],
   controllers: [ListingsController],
   providers: [ListingsService],

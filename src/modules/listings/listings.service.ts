@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,14 +15,18 @@ import { Application, ApplicationDocument } from '../applications/schemas/applic
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 import { ChatGateway } from '../conversations/chat.gateway';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class ListingsService {
+  private readonly logger = new Logger(ListingsService.name);
+
   constructor(
     @InjectModel(Listing.name) private listingModel: Model<ListingDocument>,
     @InjectMongooseModel(Application.name) private applicationModel: Model<ApplicationDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly chatGateway: ChatGateway,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async create(createListingDto: CreateListingDto, clientId: string): Promise<ListingDocument> {
@@ -205,6 +210,35 @@ export class ListingsService {
           updatedListing._id.toString(),
         );
         await this.chatGateway.emitNotification(assignedContractorId, notifForContractor);
+      }
+
+      // Auto-release escrow payments when job is marked completed
+      if (updatedListing.status === ListingStatus.COMPLETED) {
+        try {
+          const escrowTxs = await this.paymentsService.getEscrowTransactions(
+            updatedListing._id.toString(),
+          );
+          for (const tx of escrowTxs) {
+            try {
+              await this.paymentsService.releaseJobPayment(
+                tx._id.toString(),
+                clientId,
+                userRole === UserRole.ADMIN ? UserRole.ADMIN : UserRole.CLIENT,
+              );
+              this.logger.log(
+                `Auto-released escrow payment ${tx._id} for completed listing ${updatedListing._id}`,
+              );
+            } catch (err) {
+              this.logger.warn(
+                `Failed to auto-release payment ${tx._id}: ${(err as Error).message}`,
+              );
+            }
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Failed to fetch escrow for listing ${updatedListing._id}: ${(err as Error).message}`,
+          );
+        }
       }
     }
 
