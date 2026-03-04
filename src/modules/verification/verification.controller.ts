@@ -21,6 +21,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/schemas/user.schema';
 import { ParseObjectIdPipe } from '../../common/pipes/parse-object-id.pipe';
 import { Types } from 'mongoose';
+import { IsEnum } from 'class-validator';
 import {
   VerificationDocumentType,
 } from './schemas/verification-document.schema';
@@ -32,6 +33,7 @@ interface JwtUser {
 }
 
 class UploadVerificationDto {
+  @IsEnum(VerificationDocumentType)
   type: VerificationDocumentType;
 }
 
