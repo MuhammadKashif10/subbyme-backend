@@ -54,6 +54,12 @@ export class ReviewsController {
     return this.reviewsService.findByReviewee(userId.toString(), page, limit);
   }
 
+  // GET /reviews/featured — Public: approved client-to-contractor reviews for home
+  @Get('featured')
+  getFeatured(@Query('limit') limit?: number) {
+    return this.reviewsService.findApprovedForHome(limit ? Number(limit) : 10);
+  }
+
   // GET /reviews — Admin only
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)

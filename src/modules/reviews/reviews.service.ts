@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Review, ReviewDocument, ReviewType } from './schemas/review.schema';
+import { Review, ReviewDocument, ReviewType, ReviewStatus } from './schemas/review.schema';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { UsersService } from '../users/users.service';
@@ -98,10 +98,10 @@ export class ReviewsService {
       reviewerId: new Types.ObjectId(reviewerId),
       revieweeId: new Types.ObjectId(createReviewDto.revieweeId),
       listingId: new Types.ObjectId(createReviewDto.listingId),
+      status: ReviewStatus.PENDING,
     });
 
     const saved = await review.save();
-    await this.recalculateUserRating(createReviewDto.revieweeId);
 
     const notif = await this.notificationsService.create(
       createReviewDto.revieweeId,
@@ -119,7 +119,11 @@ export class ReviewsService {
     page = 1,
     limit = 20,
   ): Promise<{ reviews: ReviewDocument[]; total: number; averageRating: number }> {
-    const filter = { revieweeId: new Types.ObjectId(revieweeId) };
+    // Only show approved reviews (and legacy docs without status for backward compat)
+    const filter = {
+      revieweeId: new Types.ObjectId(revieweeId),
+      $or: [{ status: ReviewStatus.APPROVED }, { status: { $exists: false } }],
+    };
     const skip = (page - 1) * limit;
 
     const [reviews, total, ratingAgg] = await Promise.all([
@@ -253,7 +257,12 @@ export class ReviewsService {
 
   private async recalculateUserRating(userId: string): Promise<void> {
     const result = await this.reviewModel.aggregate<{ avgRating: number; count: number }>([
-      { $match: { revieweeId: new Types.ObjectId(userId) } },
+      {
+        $match: {
+          revieweeId: new Types.ObjectId(userId),
+          $or: [{ status: ReviewStatus.APPROVED }, { status: { $exists: false } }],
+        },
+      },
       {
         $group: {
           _id: null,
@@ -266,5 +275,34 @@ export class ReviewsService {
     const avgRating = result.length > 0 ? result[0].avgRating ?? 0 : 0;
     const count = result.length > 0 ? result[0].count ?? 0 : 0;
     await this.usersService.updateRating(userId, avgRating, count);
+  }
+
+  async approveReview(id: string): Promise<ReviewDocument> {
+    const review = await this.reviewModel.findById(id).exec();
+    if (!review) throw new NotFoundException('Review not found');
+    review.status = ReviewStatus.APPROVED;
+    const saved = await review.save();
+    await this.recalculateUserRating(review.revieweeId.toString());
+    return saved;
+  }
+
+  async rejectReview(id: string): Promise<ReviewDocument> {
+    const review = await this.reviewModel.findById(id).exec();
+    if (!review) throw new NotFoundException('Review not found');
+    review.status = ReviewStatus.REJECTED;
+    return review.save();
+  }
+
+  async findApprovedForHome(limit = 10): Promise<ReviewDocument[]> {
+    return this.reviewModel
+      .find({
+        type: ReviewType.CLIENT_TO_CONTRACTOR,
+        $or: [{ status: ReviewStatus.APPROVED }, { status: { $exists: false } }],
+      })
+      .populate('reviewerId', 'name avatar')
+      .populate('revieweeId', 'name trade')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
   }
 }

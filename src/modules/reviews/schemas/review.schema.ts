@@ -10,6 +10,12 @@ export enum ReviewType {
   CONTRACTOR_TO_CLIENT = 'contractor_to_client',
 }
 
+export enum ReviewStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+}
+
 @Schema({ timestamps: true, collection: 'reviews' })
 export class Review {
   @Prop({
@@ -56,6 +62,14 @@ export class Review {
     index: true,
   })
   type: ReviewType;
+
+  @Prop({
+    type: String,
+    enum: ReviewStatus,
+    default: ReviewStatus.PENDING,
+    index: true,
+  })
+  status: ReviewStatus;
 
   @Prop({ default: false })
   isFlagged: boolean;

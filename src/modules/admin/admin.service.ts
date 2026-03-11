@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
@@ -13,7 +13,7 @@ import {
   Transaction,
   TransactionDocument,
 } from '../transactions/schemas/transaction.schema';
-import { Review, ReviewDocument } from '../reviews/schemas/review.schema';
+import { Review, ReviewDocument, ReviewStatus } from '../reviews/schemas/review.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 import { ChatGateway } from '../conversations/chat.gateway';
@@ -216,13 +216,15 @@ export class AdminService {
     return { transactions, total, page, limit };
   }
 
-  async getAllReviews(query: { page?: number; limit?: number }) {
-    const { page = 1, limit = 20 } = query;
+  async getAllReviews(query: { page?: number; limit?: number; status?: string }) {
+    const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
+    const filter: Record<string, unknown> = {};
+    if (status) filter['status'] = status;
 
     const [reviews, total] = await Promise.all([
       this.reviewModel
-        .find()
+        .find(filter)
         .populate('reviewerId', 'name avatar role')
         .populate('revieweeId', 'name avatar role')
         .populate('listingId', 'title')
@@ -230,7 +232,7 @@ export class AdminService {
         .limit(limit)
         .sort({ createdAt: -1 })
         .exec(),
-      this.reviewModel.countDocuments(),
+      this.reviewModel.countDocuments(filter),
     ]);
 
     return { reviews, total, page, limit };
@@ -256,6 +258,22 @@ export class AdminService {
     return { reviews, total, page, limit };
   }
 
+  async approveReview(id: string): Promise<ReviewDocument> {
+    const review = await this.reviewModel.findById(id).exec();
+    if (!review) throw new NotFoundException('Review not found');
+    review.status = ReviewStatus.APPROVED;
+    const saved = await review.save();
+    await this.recalculateUserRating(review.revieweeId.toString());
+    return saved;
+  }
+
+  async rejectReview(id: string): Promise<ReviewDocument> {
+    const review = await this.reviewModel.findById(id).exec();
+    if (!review) throw new NotFoundException('Review not found');
+    review.status = ReviewStatus.REJECTED;
+    return review.save();
+  }
+
   async deleteReview(id: string) {
     const review = await this.reviewModel.findByIdAndDelete(id).exec();
     if (!review) return;
@@ -273,7 +291,12 @@ export class AdminService {
       avgRating: number;
       count: number;
     }>([
-      { $match: { revieweeId: new Types.ObjectId(userId) } },
+      {
+        $match: {
+          revieweeId: new Types.ObjectId(userId),
+          $or: [{ status: ReviewStatus.APPROVED }, { status: { $exists: false } }],
+        },
+      },
       {
         $group: {
           _id: null,

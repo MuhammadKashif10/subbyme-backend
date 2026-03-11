@@ -136,8 +136,19 @@ export class AdminController {
   getReviews(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('status') status?: string,
   ) {
-    return this.adminService.getAllReviews({ page, limit });
+    return this.adminService.getAllReviews({ page, limit, status });
+  }
+
+  @Patch('reviews/:id/approve')
+  approveReview(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
+    return this.adminService.approveReview(id.toString());
+  }
+
+  @Patch('reviews/:id/reject')
+  rejectReview(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
+    return this.adminService.rejectReview(id.toString());
   }
 
   @Get('reviews/flagged')
